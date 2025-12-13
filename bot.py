@@ -7,7 +7,7 @@ app = Flask(__name__)
 TOKEN = os.environ["BOT_TOKEN"]
 API_URL = f"https://api.telegram.org/bot{TOKEN}"
 
-VIDEO_URL = "https://files.catbox.moe/dt49t2.mp4"  # ⚠️ pbz.mp4는 서버에 없으니 URL 필요
+VIDEO_URL = "https://files.catbox.moe/dt49t2.mp4"
 
 CAPTION = """
 ──────────────────────────────
@@ -32,6 +32,22 @@ Welcome to Private Collection
 ──────────────────────────────
 """
 
+COUNT_FILE = "count.txt"
+
+# 관리자 ID (여기에 @mbrypie 숫자 ID 넣기)
+ADMIN_ID = 5619516265  # <-- BotFather에서 확인한 숫자 ID 넣으세요
+
+def increment_count():
+    try:
+        with open(COUNT_FILE, "r") as f:
+            count = int(f.read())
+    except:
+        count = 0
+    count += 1
+    with open(COUNT_FILE, "w") as f:
+        f.write(str(count))
+    return count
+
 @app.route("/", methods=["POST"])
 def webhook():
     update = request.get_json()
@@ -40,6 +56,9 @@ def webhook():
         message = update["message"]
         chat_id = message["chat"]["id"]
         text = message.get("text", "")
+
+        # 메시지 카운트 증가
+        increment_count()
 
         if text == "/start":
             # 비디오 전송
@@ -69,6 +88,29 @@ def webhook():
                     "reply_markup": keyboard
                 }
             )
+
+        elif text == "/count":
+            if chat_id == ADMIN_ID:
+                try:
+                    with open(COUNT_FILE, "r") as f:
+                        count = f.read()
+                except:
+                    count = "0"
+                requests.post(
+                    f"{API_URL}/sendMessage",
+                    json={
+                        "chat_id": chat_id,
+                        "text": f"총 메시지 수: {count}"
+                    }
+                )
+            else:
+                requests.post(
+                    f"{API_URL}/sendMessage",
+                    json={
+                        "chat_id": chat_id,
+                        "text": "❌ 이 명령어는 관리자만 사용할 수 있습니다."
+                    }
+                )
 
     return "ok"
 
