@@ -4,7 +4,7 @@ import os
 
 app = Flask(__name__)
 
-TOKEN = os.environ["8511250034:AAGTKkLILZ0MkMd6IkEoxcX1d5tEcLXYeNU"]
+TOKEN = os.environ["BOT_TOKEN"]
 API_URL = f"https://api.telegram.org/bot{TOKEN}"
 
 VIDEO_URL = "https://files.catbox.moe/dt49t2.mp4"  # ⚠️ pbz.mp4는 서버에 없으니 URL 필요
