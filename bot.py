@@ -76,7 +76,7 @@ def webhook():
                 "inline_keyboard": [
                     [{"text": "💸 PayPal", "url": "https://www.paypal.com/paypalme/minwookim384/20usd"}],
                     [{"text": "💳 Stripe", "url": "https://buy.stripe.com/bJe8wR1oO1nq3sN7Y41ck00"}],
-                    [{"text": "❓ Proof here", "url": "https://t.me/MBRYPIE"}]
+                    [{"text": "Proof here", "url": "https://t.me/MBRYPIE"}]
                 ]
             }
 
@@ -117,3 +117,4 @@ def webhook():
 @app.route("/", methods=["GET"])
 def index():
     return "Bot is running"
+
