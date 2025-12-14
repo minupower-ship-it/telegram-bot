@@ -4,6 +4,7 @@ import os
 
 app = Flask(__name__)
 
+# ===== 기본 설정 =====
 TOKEN = os.environ["BOT_TOKEN"]
 API_URL = f"https://api.telegram.org/bot{TOKEN}"
 
@@ -32,88 +33,103 @@ Welcome to Private Collection
 ──────────────────────────────
 """
 
-COUNT_FILE = "count.txt"
+# ===== 파일 =====
+USERS_FILE = "users.txt"   # 유입된 사람(chat_id)만 저장
 
-# 관리자 ID (여기에 @mbrypie 숫자 ID 넣기)
-ADMIN_ID = 5619516265  # <-- BotFather에서 확인한 숫자 ID 넣으세요
+# ===== 관리자 Telegram 숫자 ID =====
+ADMIN_ID = 5619516265   # ← 너 숫자 ID
 
-def increment_count():
+# ===== 유저 저장 함수 =====
+def save_user(chat_id):
     try:
-        with open(COUNT_FILE, "r") as f:
-            count = int(f.read())
+        with open(USERS_FILE, "r") as f:
+            users = f.read().splitlines()
     except:
-        count = 0
-    count += 1
-    with open(COUNT_FILE, "w") as f:
-        f.write(str(count))
-    return count
+        users = []
 
+    if str(chat_id) not in users:
+        users.append(str(chat_id))
+        with open(USERS_FILE, "w") as f:
+            f.write("\n".join(users))
+
+    return len(users)
+
+
+# ===== Webhook =====
 @app.route("/", methods=["POST"])
 def webhook():
     update = request.get_json()
 
-    if "message" in update:
-        message = update["message"]
-        chat_id = message["chat"]["id"]
-        text = message.get("text", "")
+    if "message" not in update:
+        return "ok"
 
-        # 메시지 카운트 증가
-        increment_count()
+    message = update["message"]
+    chat_id = message["chat"]["id"]
+    text = message.get("text", "")
 
-        if text == "/start":
-            # 비디오 전송
-            requests.post(
-                f"{API_URL}/sendVideo",
-                json={
-                    "chat_id": chat_id,
-                    "video": VIDEO_URL,
-                    "caption": CAPTION
-                }
-            )
+    # 유입 유저 저장 (중복 제거)
+    save_user(chat_id)
 
-            # 버튼 메시지
-            keyboard = {
-                "inline_keyboard": [
-                    [{"text": "💸 PayPal", "url": "https://www.paypal.com/paypalme/minwookim384/20usd"}],
-                    [{"text": "💳 Stripe", "url": "https://buy.stripe.com/bJe8wR1oO1nq3sN7Y41ck00"}],
-                    [{"text": "Proof here", "url": "https://t.me/MBRYPIE"}]
-                ]
+    # ===== /start =====
+    if text == "/start":
+        # 영상 전송
+        requests.post(
+            f"{API_URL}/sendVideo",
+            json={
+                "chat_id": chat_id,
+                "video": VIDEO_URL,
+                "caption": CAPTION
             }
+        )
+
+        # 버튼
+        keyboard = {
+            "inline_keyboard": [
+                [{"text": "💸 PayPal", "url": "https://www.paypal.com/paypalme/minwookim384/20usd"}],
+                [{"text": "💳 Stripe", "url": "https://buy.stripe.com/bJe8wR1oO1nq3sN7Y41ck00"}],
+                [{"text": "❓ Proof here", "url": "https://t.me/MBRYPIE"}]
+            ]
+        }
+
+        requests.post(
+            f"{API_URL}/sendMessage",
+            json={
+                "chat_id": chat_id,
+                "text": "PAYMENT METHOD\n\n💡 After payment, please send me a proof!",
+                "reply_markup": keyboard
+            }
+        )
+
+    # ===== 유입 인원 수 확인 =====
+    elif text == "/users":
+        if chat_id == ADMIN_ID:
+            try:
+                with open(USERS_FILE, "r") as f:
+                    users = f.read().splitlines()
+                count = len(users)
+            except:
+                count = 0
 
             requests.post(
                 f"{API_URL}/sendMessage",
                 json={
                     "chat_id": chat_id,
-                    "text": "PAYMENT METHOD\n\n💡 After payment, please send me a proof!",
-                    "reply_markup": keyboard
+                    "text": f"👥 총 유입 인원 수: {count}명"
+                }
+            )
+        else:
+            requests.post(
+                f"{API_URL}/sendMessage",
+                json={
+                    "chat_id": chat_id,
+                    "text": "❌ 관리자만 사용할 수 있습니다."
                 }
             )
 
-        elif text == "/count":
-            if chat_id == ADMIN_ID:
-                try:
-                    with open(COUNT_FILE, "r") as f:
-                        count = f.read()
-                except:
-                    count = "0"
-                requests.post(
-                    f"{API_URL}/sendMessage",
-                    json={
-                        "chat_id": chat_id,
-                        "text": f"총 메시지 수: {count}"
-                    }
-                )
-            else:
-                requests.post(
-                    f"{API_URL}/sendMessage",
-                    json={
-                        "chat_id": chat_id,
-                        "text": "❌ 이 명령어는 관리자만 사용할 수 있습니다."
-                    }
-                )
-
     return "ok"
 
+
+# ===== 서버 상태 =====
 @app.route("/", methods=["GET"])
 def index():
     return "Bot is running"
