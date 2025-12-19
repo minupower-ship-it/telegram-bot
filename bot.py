@@ -12,16 +12,27 @@ API_URL = f"https://api.telegram.org/bot{TOKEN}"
 VIDEO_URL = "https://files.catbox.moe/dt49t2.mp4"
 
 CAPTION = """
+
 ──────────────────────────────
+
 Welcome to Private Collection
+
 ──────────────────────────────
+
 • Only high quality handpicked content.
+
 • Premium ★nlyFans Videos
+
 • DECEMBER 2025: ★ ACTIVE ★
+
 ──────────────────────────────
+
 ★ Price: $20
+
 ★ INSTANT ACCESS ★
+
 ──────────────────────────────
+
 """
 
 ADMIN_ID = 5619516265
@@ -109,3 +120,4 @@ def main():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
