@@ -1,7 +1,7 @@
 from flask import Flask, request
 import requests
 import os
-import sqlite3
+import psycopg2
 
 app = Flask(__name__)
 
@@ -36,41 +36,40 @@ Welcome to Private Collection
 """
 
 ADMIN_ID = 5619516265
-DB_NAME = os.environ.get("DB_NAME", "users.db")
 
-# ===== DB 초기화 =====
-def init_db():
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            chat_id INTEGER PRIMARY KEY,
-            joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    conn.commit()
-    conn.close()
-
-init_db()
+# ===== Supabase (Postgres - Session Pooler) =====
+conn = psycopg2.connect(
+    host=os.environ["SUPABASE_HOST"],      # db.xxxxx.supabase.co
+    dbname=os.environ["SUPABASE_DB"],      # postgres
+    user=os.environ["SUPABASE_USER"],      # postgres
+    password=os.environ["SUPABASE_PASSWORD"],
+    port=os.environ.get("SUPABASE_PORT", 6543),
+    sslmode="require"                      # ⭐ 필수
+)
+conn.autocommit = True
 
 def save_user(chat_id):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute("INSERT OR IGNORE INTO users (chat_id) VALUES (?)", (chat_id,))
-    conn.commit()
-    c.execute("SELECT COUNT(*) FROM users")
-    count = c.fetchone()[0]
-    conn.close()
-    return count
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO users (chat_id)
+            VALUES (%s)
+            ON CONFLICT (chat_id) DO NOTHING
+            """,
+            (chat_id,)
+        )
 
-# ✅ GET + POST 통합 (중요)
+def get_user_count():
+    with conn.cursor() as cur:
+        cur.execute("SELECT COUNT(*) FROM users")
+        return cur.fetchone()[0]
+
+# ===== Webhook =====
 @app.route("/", methods=["GET", "POST"])
 def main():
-    # 서버 상태 확인용
     if request.method == "GET":
         return "Bot is running"
 
-    # ===== Webhook =====
     update = request.get_json()
     if not update or "message" not in update:
         return "ok"
@@ -79,9 +78,9 @@ def main():
     chat_id = message["chat"]["id"]
     text = message.get("text", "")
 
-    total_users = save_user(chat_id)
-
     if text == "/start":
+        save_user(chat_id)
+
         requests.post(f"{API_URL}/sendVideo", json={
             "chat_id": chat_id,
             "video": VIDEO_URL,
@@ -104,9 +103,10 @@ def main():
 
     elif text == "/users":
         if chat_id == ADMIN_ID:
+            count = get_user_count()
             requests.post(f"{API_URL}/sendMessage", json={
                 "chat_id": chat_id,
-                "text": f"👥 총 유입 인원 수: {total_users}명"
+                "text": f"👥 총 유입 인원 수: {count}명"
             })
         else:
             requests.post(f"{API_URL}/sendMessage", json={
@@ -120,4 +120,3 @@ def main():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
-
