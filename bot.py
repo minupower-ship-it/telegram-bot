@@ -37,27 +37,26 @@ Welcome to Private Collection
 
 ADMIN_ID = 5619516265
 
-# ===== Render Postgres 연결 =====
-DATABASE_URL = os.environ.get(
-    "DATABASE_URL",
-    "postgresql://telegram_db_ptfi_user:qD9rpyhC3HWWYGkZ5sXql3deAFNmTkHl@dpg-d54ajh75r7bs73eafrb0-a.virginia-postgres.render.com/telegram_db_ptfi"
+# ===== Postgres (Render Postgres) =====
+conn = psycopg2.connect(
+    host=os.environ["DB_HOST"],      # Render External URL
+    dbname=os.environ["DB_NAME"],    # telegram_db_ptfi
+    user=os.environ["DB_USER"],      # telegram_db_ptfi_user
+    password=os.environ["DB_PASSWORD"],
+    port=os.environ.get("DB_PORT", 5432),
+    sslmode="require"
 )
-
-conn = psycopg2.connect(DATABASE_URL, sslmode="require")
 conn.autocommit = True
 
-# ===== 테이블 생성 =====
-with conn.cursor() as cur:
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            chat_id BIGINT PRIMARY KEY,
-            created_at TIMESTAMP DEFAULT NOW()
-        )
-    """)
-
-# ===== DB 함수 =====
 def save_user(chat_id):
     with conn.cursor() as cur:
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                chat_id BIGINT PRIMARY KEY
+            );
+            """
+        )
         cur.execute(
             """
             INSERT INTO users (chat_id)
@@ -89,16 +88,19 @@ def main():
     if text == "/start":
         save_user(chat_id)
 
+        # 영상 전송
         requests.post(f"{API_URL}/sendVideo", json={
             "chat_id": chat_id,
             "video": VIDEO_URL,
             "caption": CAPTION
         })
 
+        # 결제 버튼
         keyboard = {
             "inline_keyboard": [
                 [{"text": "💸 PayPal", "url": "https://www.paypal.com/paypalme/minwookim384/20usd"}],
                 [{"text": "💳 Stripe", "url": "https://buy.stripe.com/bJe8wR1oO1nq3sN7Y41ck00"}],
+                [{"text": "🪙 CRYPTO USDT(TRON)", "callback_data": "crypto"}],
                 [{"text": "❓ Proof here", "url": "https://t.me/MBRYPIE"}]
             ]
         }
@@ -120,6 +122,25 @@ def main():
             requests.post(f"{API_URL}/sendMessage", json={
                 "chat_id": chat_id,
                 "text": "❌ 관리자만 사용할 수 있습니다."
+            })
+
+    return "ok"
+
+# ===== Callback Query 처리 (CRYPTO 버튼) =====
+@app.route("/callback", methods=["POST"])
+def callback():
+    update = request.get_json()
+    if "callback_query" in update:
+        query = update["callback_query"]
+        chat_id = query["message"]["chat"]["id"]
+        data = query["data"]
+
+        if data == "crypto":
+            # QR코드 이미지 전송
+            requests.post(f"{API_URL}/sendPhoto", json={
+                "chat_id": chat_id,
+                "photo": "https://files.catbox.moe/fkxh5l.png",
+                "caption": "💳 CRYPTO USDT(TRON)\n\nWallet Address:\nTERhALhVLZRqnS3mZGhE1XgxyLnKHfgBLi\n\nScan QR or copy address to pay."
             })
 
     return "ok"
