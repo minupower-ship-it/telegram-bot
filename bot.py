@@ -37,17 +37,25 @@ Welcome to Private Collection
 
 ADMIN_ID = 5619516265
 
-# ===== Supabase (Postgres - Session Pooler) =====
-conn = psycopg2.connect(
-    host=os.environ["SUPABASE_HOST"],      # db.xxxxx.supabase.co
-    dbname=os.environ["SUPABASE_DB"],      # postgres
-    user=os.environ["SUPABASE_USER"],      # postgres
-    password=os.environ["SUPABASE_PASSWORD"],
-    port=os.environ.get("SUPABASE_PORT", 6543),
-    sslmode="require"                      # ⭐ 필수
+# ===== Render Postgres 연결 =====
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL",
+    "postgresql://telegram_db_ptfi_user:qD9rpyhC3HWWYGkZ5sXql3deAFNmTkHl@dpg-d54ajh75r7bs73eafrb0-a.virginia-postgres.render.com/telegram_db_ptfi"
 )
+
+conn = psycopg2.connect(DATABASE_URL, sslmode="require")
 conn.autocommit = True
 
+# ===== 테이블 생성 =====
+with conn.cursor() as cur:
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            chat_id BIGINT PRIMARY KEY,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+
+# ===== DB 함수 =====
 def save_user(chat_id):
     with conn.cursor() as cur:
         cur.execute(
