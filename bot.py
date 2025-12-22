@@ -38,6 +38,9 @@ Welcome to Private Collection
 
 ADMIN_ID = 5619516265
 
+CRYPTO_QR = "https://files.catbox.moe/fkxh5l.png"
+CRYPTO_ADDRESS = "TERhALhVLZRqnS3mZGhE1XgxyLnKHfgBLi"
+
 # ===== Render Postgres 연결 =====
 DATABASE_URL = os.environ["DATABASE_URL"]
 
@@ -82,55 +85,77 @@ def main():
         return "Bot is running"
 
     update = request.get_json()
-    if not update or "message" not in update:
+    if not update:
         return "ok"
 
-    message = update["message"]
-    chat_id = message["chat"]["id"]
-    text = message.get("text", "")
+    message = update.get("message")
+    callback_query = update.get("callback_query")
+    
+    # ===== 일반 메시지 처리 =====
+    if message:
+        chat_id = message["chat"]["id"]
+        text = message.get("text", "")
 
-    if text == "/start":
-        save_user(chat_id)
+        if text == "/start":
+            save_user(chat_id)
 
-        requests.post(f"{API_URL}/sendVideo", json={
-            "chat_id": chat_id,
-            "video": VIDEO_URL,
-            "caption": CAPTION
-        })
-
-        keyboard = {
-            "inline_keyboard": [
-                [{"text": "💸 PayPal", "url": "https://www.paypal.com/paypalme/minwookim384/20usd"}],
-                [{"text": "💳 Stripe", "url": "https://buy.stripe.com/bJe8wR1oO1nq3sN7Y41ck00"}],
-                [{"text": "🪙 CRYPTO USDT(TRON)", "url": "https://files.catbox.moe/fkxh5l.png"}],
-                [{"text": "❓ Proof here", "url": "https://t.me/MBRYPIE"}]
-            ]
-        }
-
-        crypto_message = f"💡 CRYPTO USDT(TRON) Payment\n\nWallet Address:\nTERhALhVLZRqnS3mZGhE1XgxyLnKHfgBLi\n\nScan QR code or copy address above."
-
-        requests.post(f"{API_URL}/sendMessage", json={
-            "chat_id": chat_id,
-            "text": crypto_message
-        })
-
-        requests.post(f"{API_URL}/sendMessage", json={
-            "chat_id": chat_id,
-            "text": "PAYMENT METHOD\n\n💡 After payment, please send me a proof!",
-            "reply_markup": keyboard
-        })
-
-    elif text == "/users":
-        if chat_id == ADMIN_ID:
-            count = get_user_count()
-            requests.post(f"{API_URL}/sendMessage", json={
+            requests.post(f"{API_URL}/sendVideo", json={
                 "chat_id": chat_id,
-                "text": f"👥 총 유입 인원 수: {count}명"
+                "video": VIDEO_URL,
+                "caption": CAPTION
             })
-        else:
+
+            keyboard = {
+                "inline_keyboard": [
+                    [{"text": "💸 PayPal", "url": "https://www.paypal.com/paypalme/minwookim384/20usd"}],
+                    [{"text": "💳 Stripe", "url": "https://buy.stripe.com/bJe8wR1oO1nq3sN7Y41ck00"}],
+                    [{"text": "🪙 CRYPTO USDT(TRON)", "callback_data": "crypto"}],
+                    [{"text": "❓ Proof here", "url": "https://t.me/MBRYPIE"}]
+                ]
+            }
+
             requests.post(f"{API_URL}/sendMessage", json={
                 "chat_id": chat_id,
-                "text": "❌ 관리자만 사용할 수 있습니다."
+                "text": "PAYMENT METHOD\n\n💡 After payment, please send me a proof!",
+                "reply_markup": keyboard
+            })
+
+        elif text == "/users":
+            if chat_id == ADMIN_ID:
+                count = get_user_count()
+                requests.post(f"{API_URL}/sendMessage", json={
+                    "chat_id": chat_id,
+                    "text": f"👥 총 유입 인원 수: {count}명"
+                })
+            else:
+                requests.post(f"{API_URL}/sendMessage", json={
+                    "chat_id": chat_id,
+                    "text": "❌ 관리자만 사용할 수 있습니다."
+                })
+
+    # ===== 버튼 클릭 처리 =====
+    elif callback_query:
+        chat_id = callback_query["from"]["id"]
+        data = callback_query["data"]
+
+        if data == "crypto":
+            # QR 코드 이미지와 지갑 주소 전송
+            requests.post(f"{API_URL}/sendPhoto", json={
+                "chat_id": chat_id,
+                "photo": CRYPTO_QR,
+                "caption": f"💡 CRYPTO USDT(TRON) Payment\n\nWallet Address:\n{CRYPTO_ADDRESS}"
+            })
+
+            # Proof Here 버튼 다시 전송
+            proof_keyboard = {
+                "inline_keyboard": [
+                    [{"text": "❓ Proof here", "url": "https://t.me/MBRYPIE"}]
+                ]
+            }
+            requests.post(f"{API_URL}/sendMessage", json={
+                "chat_id": chat_id,
+                "text": "💡 After payment, please send me a proof!",
+                "reply_markup": proof_keyboard
             })
 
     return "ok"
