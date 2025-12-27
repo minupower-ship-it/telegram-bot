@@ -209,7 +209,7 @@ def main():
 
             requests.post(f"{API_URL}/sendMessage", json={
                 "chat_id": chat_id,
-                "text": "Please select your language / Veuillez sélectionner votre langue / 请选择语言 / يرجى اختيار اللغة / Por favor seleccione su idioma",
+                "text": "Please select your language",
                 "reply_markup": lang_keyboard
             })
 
@@ -311,3 +311,4 @@ def main():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
