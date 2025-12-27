@@ -231,6 +231,12 @@ def main():
         chat_id = callback_query["from"]["id"]
         data = callback_query["data"]
 
+        # ✅ 버튼 클릭 처리 완료 응답
+        callback_id = callback_query["id"]
+        requests.post(f"{API_URL}/answerCallbackQuery", json={
+            "callback_query_id": callback_id
+        })
+
         # 언어 선택
         if data.startswith("lang_"):
             language = data.split("_")[1]
