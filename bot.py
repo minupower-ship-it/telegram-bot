@@ -6,16 +6,20 @@ import urllib.parse as up
 
 app = Flask(__name__)
 
-# ===== 기본 설정 =====
+# ================= 기본 설정 =================
 TOKEN = os.environ.get("BOT_TOKEN")
 API_URL = f"https://api.telegram.org/bot{TOKEN}"
 
 VIDEO_URL = "https://files.catbox.moe/dt49t2.mp4"
 
-# ===== 캡션 (줄마다 빈 줄 추가) =====
+ADMIN_ID = 5619516265
+
+CRYPTO_QR = "https://files.catbox.moe/fkxh5l.png"
+CRYPTO_ADDRESS = "TERhALhVLZRqnS3mZGhE1XgxyLnKHfgBLi"
+
+# ================= 캡션 =================
 CAPTIONS = {
-    "EN": """
-──────────────────────────────
+    "EN": """──────────────────────────────
 
 Welcome to Private Collection
 
@@ -33,10 +37,9 @@ Welcome to Private Collection
 
 ★ INSTANT ACCESS ★
 
-──────────────────────────────
-""",
-    "FR": """
-──────────────────────────────
+──────────────────────────────""",
+
+    "FR": """──────────────────────────────
 
 Bienvenue dans la Collection Privée
 
@@ -54,10 +57,9 @@ Bienvenue dans la Collection Privée
 
 ★ ACCÈS INSTANTANÉ ★
 
-──────────────────────────────
-""",
-    "ZH": """
-──────────────────────────────
+──────────────────────────────""",
+
+    "ZH": """──────────────────────────────
 
 私人收藏欢迎您
 
@@ -75,10 +77,9 @@ Bienvenue dans la Collection Privée
 
 ★ 即刻访问 ★
 
-──────────────────────────────
-""",
-    "AR": """
-──────────────────────────────
+──────────────────────────────""",
+
+    "AR": """──────────────────────────────
 
 مرحبًا بك في المجموعة الخاصة
 
@@ -96,10 +97,9 @@ Bienvenue dans la Collection Privée
 
 ★ الوصول الفوري ★
 
-──────────────────────────────
-""",
-    "ES": """
-──────────────────────────────
+──────────────────────────────""",
+
+    "ES": """──────────────────────────────
 
 Bienvenido a la Colección Privada
 
@@ -117,17 +117,11 @@ Bienvenido a la Colección Privada
 
 ★ ACCESO INSTANTÁNEO ★
 
-──────────────────────────────
-"""
+──────────────────────────────"""
 }
 
-ADMIN_ID = 5619516265
-
-CRYPTO_QR = "https://files.catbox.moe/fkxh5l.png"
-CRYPTO_ADDRESS = "TERhALhVLZRqnS3mZGhE1XgxyLnKHfgBLi"
-
-# ===== Render Postgres 연결 =====
-DATABASE_URL = os.environ["DATABASE_URL"]
+# ================= DB 연결 =================
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
 up.uses_netloc.append("postgres")
 url = up.urlparse(DATABASE_URL)
@@ -141,20 +135,34 @@ conn = psycopg2.connect(
 )
 conn.autocommit = True
 
-# ===== DB 함수 =====
-def save_user(chat_id):
+
+# ================= DB 마이그레이션 (자동 실행) =================
+def migrate_db():
     with conn.cursor() as cur:
         cur.execute("""
             CREATE TABLE IF NOT EXISTS users (
-                chat_id BIGINT PRIMARY KEY,
-                language TEXT DEFAULT 'EN'
+                chat_id BIGINT PRIMARY KEY
             )
         """)
+        cur.execute("""
+            ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS language TEXT DEFAULT 'EN'
+        """)
+    print("DB migration completed")
+
+
+migrate_db()
+
+
+# ================= DB 함수 =================
+def save_user(chat_id):
+    with conn.cursor() as cur:
         cur.execute("""
             INSERT INTO users (chat_id)
             VALUES (%s)
             ON CONFLICT (chat_id) DO NOTHING
         """, (chat_id,))
+
 
 def set_user_language(chat_id, language):
     with conn.cursor() as cur:
@@ -164,22 +172,23 @@ def set_user_language(chat_id, language):
             WHERE chat_id = %s
         """, (language, chat_id))
 
+
 def get_user_language(chat_id):
     with conn.cursor() as cur:
         cur.execute("SELECT language FROM users WHERE chat_id=%s", (chat_id,))
-        result = cur.fetchone()
-        return result[0] if result else "EN"
+        row = cur.fetchone()
+        return row[0] if row else "EN"
+
 
 def get_user_count():
     with conn.cursor() as cur:
         cur.execute("SELECT COUNT(*) FROM users")
         return cur.fetchone()[0]
 
-# ===== Webhook =====
-@app.route("/", methods=["GET", "POST"])
-def main():
-    print("🔥 UPDATE RECEIVED:", request.get_json())
 
+# ================= Webhook =================
+@app.route("/", methods=["GET", "POST"])
+def webhook():
     if request.method == "GET":
         return "Bot is running"
 
@@ -187,19 +196,16 @@ def main():
     if not update:
         return "ok"
 
-    message = update.get("message")
-    callback_query = update.get("callback_query")
-    
-    # ===== 일반 메시지 처리 =====
-    if message:
+    # ---------- 메시지 ----------
+    if "message" in update:
+        message = update["message"]
         chat_id = message["chat"]["id"]
         text = message.get("text", "")
 
         if text == "/start":
             save_user(chat_id)
 
-            # 언어 선택 버튼
-            lang_keyboard = {
+            keyboard = {
                 "inline_keyboard": [
                     [{"text": "🇬🇧 EN", "callback_data": "lang_EN"}],
                     [{"text": "🇫🇷 FR", "callback_data": "lang_FR"}],
@@ -212,66 +218,36 @@ def main():
             requests.post(f"{API_URL}/sendMessage", json={
                 "chat_id": chat_id,
                 "text": "Please select your language",
-                "reply_markup": lang_keyboard
+                "reply_markup": keyboard
             })
 
-        elif text == "/users":
-            if chat_id == ADMIN_ID:
-                count = get_user_count()
-                requests.post(f"{API_URL}/sendMessage", json={
-                    "chat_id": chat_id,
-                    "text": f"👥 총 유입 인원 수: {count}명"
-                })
-            else:
-                requests.post(f"{API_URL}/sendMessage", json={
-                    "chat_id": chat_id,
-                    "text": "❌ 관리자만 사용할 수 있습니다."
-                })
-
-    # ===== 버튼 클릭 처리 =====
-    elif callback_query:
-        chat_id = callback_query["from"]["id"]
-        data = callback_query["data"]
-
-        # ✅ 버튼 클릭 처리 완료 응답
-        callback_id = callback_query["id"]
-        requests.post(f"{API_URL}/answerCallbackQuery", json={
-            "callback_query_id": callback_id
-        })
-
-        # 언어 선택
-        if data.startswith("lang_"):
-            language = data.split("_")[1]
-            set_user_language(chat_id, language)
-
-            # 안내 메시지
-            messages = {
-                "EN": "✅ Language set to English.",
-                "FR": "✅ Langue définie sur le français.",
-                "ZH": "✅ 语言已设置为中文。",
-                "AR": "✅ تم تعيين اللغة إلى العربية.",
-                "ES": "✅ Idioma configurado a Español."
-            }
+        elif text == "/users" and chat_id == ADMIN_ID:
+            count = get_user_count()
             requests.post(f"{API_URL}/sendMessage", json={
                 "chat_id": chat_id,
-                "text": messages.get(language, messages["EN"])
+                "text": f"👥 Total users: {count}"
             })
 
-            # 선택 후 영상 전송
+    # ---------- 버튼 ----------
+    if "callback_query" in update:
+        cq = update["callback_query"]
+        chat_id = cq["from"]["id"]
+        data = cq["data"]
+
+        # Telegram 로딩 멈추기
+        requests.post(f"{API_URL}/answerCallbackQuery", json={
+            "callback_query_id": cq["id"]
+        })
+
+        if data.startswith("lang_"):
+            lang = data.split("_")[1]
+            set_user_language(chat_id, lang)
+
             requests.post(f"{API_URL}/sendVideo", json={
                 "chat_id": chat_id,
                 "video": VIDEO_URL,
-                "caption": CAPTIONS.get(language, CAPTIONS["EN"])
+                "caption": CAPTIONS.get(lang, CAPTIONS["EN"])
             })
-
-            # 결제 버튼
-            payment_texts = {
-                "EN": "💡 After payment, please send me a proof!",
-                "FR": "💡 Après le paiement, veuillez m'envoyer une preuve !",
-                "ZH": "💡 付款后，请发送付款凭证！",
-                "AR": "💡 بعد الدفع، يرجى إرسال الإثبات!",
-                "ES": "💡 Después del pago, por favor envíeme una prueba!"
-            }
 
             payment_keyboard = {
                 "inline_keyboard": [
@@ -284,34 +260,21 @@ def main():
 
             requests.post(f"{API_URL}/sendMessage", json={
                 "chat_id": chat_id,
-                "text": payment_texts.get(language, payment_texts["EN"]),
+                "text": "💡 After payment, please send proof",
                 "reply_markup": payment_keyboard
             })
 
-        # CRYPTO 버튼
         elif data == "crypto":
             requests.post(f"{API_URL}/sendPhoto", json={
                 "chat_id": chat_id,
                 "photo": CRYPTO_QR,
-                "caption": f"💡 CRYPTO USDT(TRON) Payment\n\nWallet Address:\n{CRYPTO_ADDRESS}"
-            })
-
-            proof_keyboard = {
-                "inline_keyboard": [
-                    [{"text": "❓ Proof here", "url": "https://t.me/MBRYPIE"}]
-                ]
-            }
-            requests.post(f"{API_URL}/sendMessage", json={
-                "chat_id": chat_id,
-                "text": "💡 After payment, please send me a proof!",
-                "reply_markup": proof_keyboard
+                "caption": f"USDT (TRON)\n\n{CRYPTO_ADDRESS}"
             })
 
     return "ok"
 
-# ===== Render 실행 =====
+
+# ================= Render 실행 =================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
-
-
