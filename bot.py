@@ -12,8 +12,9 @@ API_URL = f"https://api.telegram.org/bot{TOKEN}"
 
 VIDEO_URL = "https://files.catbox.moe/dt49t2.mp4"
 
-CAPTION = """
-
+# ===== 캡션 (줄마다 빈 줄 추가) =====
+CAPTIONS = {
+    "EN": """
 ──────────────────────────────
 
 Welcome to Private Collection
@@ -33,8 +34,92 @@ Welcome to Private Collection
 ★ INSTANT ACCESS ★
 
 ──────────────────────────────
+""",
+    "FR": """
+──────────────────────────────
 
+Bienvenue dans la Collection Privée
+
+──────────────────────────────
+
+• Contenu sélectionné de haute qualité uniquement.
+
+• Vidéos Premium ★nlyFans
+
+• DÉCEMBRE 2025 : ★ ACTIF ★
+
+──────────────────────────────
+
+★ Prix : 20$
+
+★ ACCÈS INSTANTANÉ ★
+
+──────────────────────────────
+""",
+    "ZH": """
+──────────────────────────────
+
+私人收藏欢迎您
+
+──────────────────────────────
+
+• 仅高质量精选内容
+
+• 高级 ★nlyFans 视频
+
+• 2025年12月：★ 活跃 ★
+
+──────────────────────────────
+
+★ 价格：$20
+
+★ 即刻访问 ★
+
+──────────────────────────────
+""",
+    "AR": """
+──────────────────────────────
+
+مرحبًا بك في المجموعة الخاصة
+
+──────────────────────────────
+
+• محتوى مختار عالي الجودة فقط
+
+• فيديوهات ★nlyFans المميزة
+
+• ديسمبر 2025: ★ نشط ★
+
+──────────────────────────────
+
+★ السعر: 20$
+
+★ الوصول الفوري ★
+
+──────────────────────────────
+""",
+    "ES": """
+──────────────────────────────
+
+Bienvenido a la Colección Privada
+
+──────────────────────────────
+
+• Solo contenido seleccionado de alta calidad
+
+• Videos Premium ★nlyFans
+
+• DICIEMBRE 2025: ★ ACTIVO ★
+
+──────────────────────────────
+
+★ Precio: $20
+
+★ ACCESO INSTANTÁNEO ★
+
+──────────────────────────────
 """
+}
 
 ADMIN_ID = 5619516265
 
@@ -56,22 +141,34 @@ conn = psycopg2.connect(
 )
 conn.autocommit = True
 
+# ===== DB 함수 =====
 def save_user(chat_id):
     with conn.cursor() as cur:
-        cur.execute(
-            """
+        cur.execute("""
             CREATE TABLE IF NOT EXISTS users (
-                chat_id BIGINT PRIMARY KEY
+                chat_id BIGINT PRIMARY KEY,
+                language TEXT DEFAULT 'EN'
             )
-            """)
-        cur.execute(
-            """
+        """)
+        cur.execute("""
             INSERT INTO users (chat_id)
             VALUES (%s)
             ON CONFLICT (chat_id) DO NOTHING
-            """,
-            (chat_id,)
-        )
+        """, (chat_id,))
+
+def set_user_language(chat_id, language):
+    with conn.cursor() as cur:
+        cur.execute("""
+            UPDATE users
+            SET language = %s
+            WHERE chat_id = %s
+        """, (language, chat_id))
+
+def get_user_language(chat_id):
+    with conn.cursor() as cur:
+        cur.execute("SELECT language FROM users WHERE chat_id=%s", (chat_id,))
+        result = cur.fetchone()
+        return result[0] if result else "EN"
 
 def get_user_count():
     with conn.cursor() as cur:
@@ -99,25 +196,21 @@ def main():
         if text == "/start":
             save_user(chat_id)
 
-            requests.post(f"{API_URL}/sendVideo", json={
-                "chat_id": chat_id,
-                "video": VIDEO_URL,
-                "caption": CAPTION
-            })
-
-            keyboard = {
+            # 언어 선택 버튼
+            lang_keyboard = {
                 "inline_keyboard": [
-                    [{"text": "💸 PayPal", "url": "https://www.paypal.com/paypalme/minwookim384/20usd"}],
-                    [{"text": "💳 Stripe", "url": "https://buy.stripe.com/bJe8wR1oO1nq3sN7Y41ck00"}],
-                    [{"text": "🪙 CRYPTO USDT(TRON)", "callback_data": "crypto"}],
-                    [{"text": "❓ Proof here", "url": "https://t.me/MBRYPIE"}]
+                    [{"text": "🇬🇧 EN", "callback_data": "lang_EN"}],
+                    [{"text": "🇫🇷 FR", "callback_data": "lang_FR"}],
+                    [{"text": "🇨🇳 ZH", "callback_data": "lang_ZH"}],
+                    [{"text": "🇸🇦 AR", "callback_data": "lang_AR"}],
+                    [{"text": "🇪🇸 ES", "callback_data": "lang_ES"}]
                 ]
             }
 
             requests.post(f"{API_URL}/sendMessage", json={
                 "chat_id": chat_id,
-                "text": "PAYMENT METHOD\n\n💡 After payment, please send me a proof!",
-                "reply_markup": keyboard
+                "text": "Please select your language / Veuillez sélectionner votre langue / 请选择语言 / يرجى اختيار اللغة / Por favor seleccione su idioma",
+                "reply_markup": lang_keyboard
             })
 
         elif text == "/users":
@@ -138,15 +231,63 @@ def main():
         chat_id = callback_query["from"]["id"]
         data = callback_query["data"]
 
-        if data == "crypto":
-            # QR 코드 이미지와 지갑 주소 전송
+        # 언어 선택
+        if data.startswith("lang_"):
+            language = data.split("_")[1]
+            set_user_language(chat_id, language)
+
+            # 안내 메시지
+            messages = {
+                "EN": "✅ Language set to English.",
+                "FR": "✅ Langue définie sur le français.",
+                "ZH": "✅ 语言已设置为中文。",
+                "AR": "✅ تم تعيين اللغة إلى العربية.",
+                "ES": "✅ Idioma configurado a Español."
+            }
+            requests.post(f"{API_URL}/sendMessage", json={
+                "chat_id": chat_id,
+                "text": messages.get(language, messages["EN"])
+            })
+
+            # 선택 후 영상 전송
+            requests.post(f"{API_URL}/sendVideo", json={
+                "chat_id": chat_id,
+                "video": VIDEO_URL,
+                "caption": CAPTIONS.get(language, CAPTIONS["EN"])
+            })
+
+            # 결제 버튼
+            payment_texts = {
+                "EN": "💡 After payment, please send me a proof!",
+                "FR": "💡 Après le paiement, veuillez m'envoyer une preuve !",
+                "ZH": "💡 付款后，请发送付款凭证！",
+                "AR": "💡 بعد الدفع، يرجى إرسال الإثبات!",
+                "ES": "💡 Después del pago, por favor envíeme una prueba!"
+            }
+
+            payment_keyboard = {
+                "inline_keyboard": [
+                    [{"text": "💸 PayPal", "url": "https://www.paypal.com/paypalme/minwookim384/20usd"}],
+                    [{"text": "💳 Stripe", "url": "https://buy.stripe.com/bJe8wR1oO1nq3sN7Y41ck00"}],
+                    [{"text": "🪙 CRYPTO USDT(TRON)", "callback_data": "crypto"}],
+                    [{"text": "❓ Proof here", "url": "https://t.me/MBRYPIE"}]
+                ]
+            }
+
+            requests.post(f"{API_URL}/sendMessage", json={
+                "chat_id": chat_id,
+                "text": payment_texts.get(language, payment_texts["EN"]),
+                "reply_markup": payment_keyboard
+            })
+
+        # CRYPTO 버튼
+        elif data == "crypto":
             requests.post(f"{API_URL}/sendPhoto", json={
                 "chat_id": chat_id,
                 "photo": CRYPTO_QR,
                 "caption": f"💡 CRYPTO USDT(TRON) Payment\n\nWallet Address:\n{CRYPTO_ADDRESS}"
             })
 
-            # Proof Here 버튼 다시 전송
             proof_keyboard = {
                 "inline_keyboard": [
                     [{"text": "❓ Proof here", "url": "https://t.me/MBRYPIE"}]
