@@ -178,6 +178,8 @@ def get_user_count():
 # ===== Webhook =====
 @app.route("/", methods=["GET", "POST"])
 def main():
+    print("🔥 UPDATE RECEIVED:", request.get_json())
+
     if request.method == "GET":
         return "Bot is running"
 
@@ -311,4 +313,5 @@ def main():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
 
