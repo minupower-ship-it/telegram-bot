@@ -53,7 +53,7 @@ Bienvenue dans la Collection Privée
 
 ──────────────────────────────
 
-★ Prix : 25$
+★ Prix : 20$
 
 ★ ACCÈS INSTANTANÉ ★
 
@@ -93,7 +93,7 @@ Bienvenue dans la Collection Privée
 
 ──────────────────────────────
 
-★ السعر: 25$
+★ السعر: 20$
 
 ★ الوصول الفوري ★
 
@@ -113,7 +113,7 @@ Bienvenido a la Colección Privada
 
 ──────────────────────────────
 
-★ Precio: $25
+★ Precio: $20
 
 ★ ACCESO INSTANTÁNEO ★
 
@@ -251,8 +251,8 @@ def webhook():
 
             payment_keyboard = {
                 "inline_keyboard": [
-                    [{"text": "💸 PayPal", "url": "https://www.paypal.com/paypalme/minwookim384/25usd"}],
-                    [{"text": "💳 Stripe", "url": "https://buy.stripe.com/00w6oJebAgik0gB3HO1ck03"}],
+                    [{"text": "💸 PayPal", "url": "https://www.paypal.com/paypalme/minwookim384/20usd"}],
+                    [{"text": "💳 Stripe", "url": "https://buy.stripe.com/bJe8wR1oO1nq3sN7Y41ck00"}],
                     [{"text": "🪙 CRYPTO USDT(TRON)", "callback_data": "crypto"}],
                     [{"text": "❓ Proof here", "url": "https://t.me/MBRYPIE"}]
                 ]
@@ -278,4 +278,5 @@ def webhook():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
 
