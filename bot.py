@@ -19,6 +19,7 @@ CRYPTO_ADDRESS = "TERhALhVLZRqnS3mZGhE1XgxyLnKHfgBLi"
 
 # ================= DB 연결 =================
 DATABASE_URL = os.environ.get("DATABASE_URL")
+
 up.uses_netloc.append("postgres")
 url = up.urlparse(DATABASE_URL)
 
@@ -91,17 +92,19 @@ def webhook():
         chat_id = message["chat"]["id"]
         text = message.get("text", "")
 
-        if text == "/start":
+        command = text.split()[0] if text else ""
+
+        # /start (payload 대응)
+        if command == "/start":
             save_user(chat_id)
 
-            # 비디오 + JOIN 버튼
             requests.post(f"{API_URL}/sendVideo", json={
                 "chat_id": chat_id,
                 "video": VIDEO_URL,
                 "reply_markup": join_keyboard()
             })
 
-        elif text == "/users" and chat_id == ADMIN_ID:
+        elif command == "/users" and chat_id == ADMIN_ID:
             count = get_user_count()
             requests.post(f"{API_URL}/sendMessage", json={
                 "chat_id": chat_id,
@@ -114,27 +117,27 @@ def webhook():
         chat_id = cq["from"]["id"]
         data = cq["data"]
 
-        # Telegram 로딩 멈춤
+        # 로딩 종료
         requests.post(f"{API_URL}/answerCallbackQuery", json={
             "callback_query_id": cq["id"]
         })
 
         if data == "join":
-            # 오늘 날짜 가져오기
-            today = datetime.utcnow()
-            formatted_date = today.strftime("%b %d")  # 예: Jan 01
+            today = datetime.now().strftime("%b %d")
 
-            # JOIN 클릭 시 caption + 결제 버튼 표시
-            caption_text = f"💎 Lifetime Entry - $20\n📅 {formatted_date} - on\n⚡ Immediate access - on"
+            text = (
+                "💎 Lifetime Entry — $20\n\n"
+                f"{today} — ON\n"
+                "Immediate access — ON"
+            )
 
             requests.post(f"{API_URL}/sendMessage", json={
                 "chat_id": chat_id,
-                "text": caption_text,
+                "text": text,
                 "reply_markup": payment_keyboard()
             })
 
         elif data == "crypto":
-            # USDT 클릭 시 QR 사진 전송
             requests.post(f"{API_URL}/sendPhoto", json={
                 "chat_id": chat_id,
                 "photo": CRYPTO_QR,
