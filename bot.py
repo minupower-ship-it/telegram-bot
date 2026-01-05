@@ -33,7 +33,7 @@ Welcome to Private Collection
 
 ──────────────────────────────
 
-★ Price: $25
+★ Price: $20
 
 ★ INSTANT ACCESS ★
 
@@ -73,7 +73,7 @@ Bienvenue dans la Collection Privée
 
 ──────────────────────────────
 
-★ 价格：$25
+★ 价格：$20
 
 ★ 即刻访问 ★
 
@@ -278,5 +278,6 @@ def webhook():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
 
 
