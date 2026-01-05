@@ -3,6 +3,7 @@ import requests
 import os
 import psycopg2
 import urllib.parse as up
+from threading import Thread
 from datetime import datetime
 
 app = Flask(__name__)
@@ -18,7 +19,6 @@ CRYPTO_ADDRESS = "TERhALhVLZRqnS3mZGhE1XgxyLnKHfgBLi"
 
 # ================= DB 연결 =================
 DATABASE_URL = os.environ.get("DATABASE_URL")
-
 up.uses_netloc.append("postgres")
 url = up.urlparse(DATABASE_URL)
 
@@ -75,6 +75,58 @@ def payment_keyboard():
         ]
     }
 
+# ================= 업데이트 처리 =================
+def handle_update(update):
+    chat_id = None
+    if "message" in update:
+        message = update["message"]
+        chat_id = message["chat"]["id"]
+        text = message.get("text", "")
+
+        if text == "/start":
+            save_user(chat_id)
+            # JOIN 버튼 전송
+            requests.post(f"{API_URL}/sendMessage", json={
+                "chat_id": chat_id,
+                "text": "Welcome to LETMENUT!",
+                "reply_markup": join_keyboard()
+            })
+
+        elif text == "/users" and chat_id == ADMIN_ID:
+            count = get_user_count()
+            requests.post(f"{API_URL}/sendMessage", json={
+                "chat_id": chat_id,
+                "text": f"👥 Total users: {count}"
+            })
+
+    if "callback_query" in update:
+        cq = update["callback_query"]
+        chat_id = cq["from"]["id"]
+        data = cq["data"]
+
+        # 버튼 로딩 멈춤
+        requests.post(f"{API_URL}/answerCallbackQuery", json={
+            "callback_query_id": cq["id"]
+        })
+
+        if data == "join":
+            # JOIN 클릭 시 결제 메시지 + 오늘 날짜
+            today = datetime.now().strftime("%b %d")  # Jan 05
+            caption = f"💎 Lifetime Entry - $20\n{today} - on\nImmediate access - on"
+            requests.post(f"{API_URL}/sendMessage", json={
+                "chat_id": chat_id,
+                "text": caption,
+                "reply_markup": payment_keyboard()
+            })
+
+        elif data == "crypto":
+            # USDT 클릭 시 QR 사진 전송
+            requests.post(f"{API_URL}/sendPhoto", json={
+                "chat_id": chat_id,
+                "photo": CRYPTO_QR,
+                "caption": f"USDT (TRON)\n\n{CRYPTO_ADDRESS}"
+            })
+
 # ================= Webhook =================
 @app.route("/", methods=["GET", "POST"])
 def webhook():
@@ -85,68 +137,11 @@ def webhook():
     if not update:
         return "ok"
 
-    # ---------- 메시지 처리 ----------
-    if "message" in update:
-        message = update["message"]
-        chat_id = message["chat"]["id"]
-        text = message.get("text", "")
-
-        command = text.split()[0] if text else ""
-
-        # /start (payload 대응)
-        if command == "/start":
-            save_user(chat_id)
-
-            requests.post(f"{API_URL}/sendVideo", json={
-                "chat_id": chat_id,
-                "video": VIDEO_URL,
-                "reply_markup": join_keyboard()
-            })
-
-        elif command == "/users" and chat_id == ADMIN_ID:
-            count = get_user_count()
-            requests.post(f"{API_URL}/sendMessage", json={
-                "chat_id": chat_id,
-                "text": f"👥 Total users: {count}"
-            })
-
-    # ---------- 버튼 처리 ----------
-    if "callback_query" in update:
-        cq = update["callback_query"]
-        chat_id = cq["from"]["id"]
-        data = cq["data"]
-
-        # 로딩 종료
-        requests.post(f"{API_URL}/answerCallbackQuery", json={
-            "callback_query_id": cq["id"]
-        })
-
-        if data == "join":
-            today = datetime.now().strftime("%b %d")
-
-            text = (
-                "💎 Lifetime Entry — $20\n\n"
-                f"{today} — ON\n"
-                "Immediate access — ON"
-            )
-
-            requests.post(f"{API_URL}/sendMessage", json={
-                "chat_id": chat_id,
-                "text": text,
-                "reply_markup": payment_keyboard()
-            })
-
-        elif data == "crypto":
-            requests.post(f"{API_URL}/sendPhoto", json={
-                "chat_id": chat_id,
-                "photo": CRYPTO_QR,
-                "caption": f"USDT (TRON)\n\n{CRYPTO_ADDRESS}"
-            })
-
+    # 즉시 200 OK 반환, 실제 처리 백그라운드
+    Thread(target=handle_update, args=(update,)).start()
     return "ok"
 
 # ================= 실행 =================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
-
